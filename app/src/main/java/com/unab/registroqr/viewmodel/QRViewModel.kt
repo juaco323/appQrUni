@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import android.util.Log
 
 /**
  * ViewModel principal de la aplicación
@@ -56,14 +57,27 @@ class QRViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun saveQR(qr: SavedQR) {
         viewModelScope.launch {
+            Log.d("QRViewModel", "=== saveQR llamado ===")
+            Log.d("QRViewModel", "QR ID: ${qr.id}")
+            Log.d("QRViewModel", "QR Name: ${qr.name}")
+            Log.d("QRViewModel", "QR Link: ${qr.link}")
+            Log.d("QRViewModel", "Notificaciones: ${qr.notifications.size}")
+            
             val result = repository.saveQR(qr.copy(position = _qrList.value.size))
+            Log.d("QRViewModel", "Resultado del guardado: $result")
+            
             _saveResult.value = result
             if (result is SaveQRResult.Success) {
+                Log.d("QRViewModel", "✓ QR guardado exitosamente")
                 // Programar notificación si está habilitada
                 if (qr.notificationEnabled) {
+                    Log.d("QRViewModel", "Programando notificaciones...")
                     AlarmScheduler.scheduleClassNotification(getApplication(), qr)
                 }
                 loadQRs()
+                Log.d("QRViewModel", "Lista recargada. Total QRs: ${_qrList.value.size}")
+            } else {
+                Log.e("QRViewModel", "✗ Error al guardar: $result")
             }
         }
     }
@@ -86,6 +100,16 @@ class QRViewModel(application: Application) : AndroidViewModel(application) {
     fun updateQROrder(newOrder: List<SavedQR>) {
         viewModelScope.launch {
             repository.updateQROrder(newOrder)
+            loadQRs()
+        }
+    }
+    
+    /**
+     * Actualiza un QR existente
+     */
+    fun updateQR(qr: SavedQR) {
+        viewModelScope.launch {
+            repository.updateQR(qr)
             loadQRs()
         }
     }

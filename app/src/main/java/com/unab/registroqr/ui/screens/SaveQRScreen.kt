@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +38,17 @@ import java.nio.charset.StandardCharsets
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.UUID
+import android.util.Log
+
+/**
+ * Clase de datos para representar un horario individual
+ */
+data class ScheduleItem(
+    val id: String = UUID.randomUUID().toString(),
+    val day: DayOfWeek,
+    val time: LocalTime
+)
 
 /**
  * Pantalla para guardar un QR escaneado
@@ -56,9 +68,13 @@ fun SaveQRScreen(
     var qrName by remember { mutableStateOf("") }
     var selectedColor by remember { mutableStateOf(QRColor.BLUE) }
     
-    // Campos para información de la clase
+    // Campos temporales para agregar un horario
     var selectedDay by remember { mutableStateOf<DayOfWeek?>(null) }
     var selectedTime by remember { mutableStateOf<LocalTime?>(null) }
+    
+    // Lista de horarios agregados
+    var scheduleList by remember { mutableStateOf<List<ScheduleItem>>(emptyList()) }
+    
     var notificationEnabled by remember { mutableStateOf(true) }
     var showDayPicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -147,28 +163,118 @@ fun SaveQRScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Selector de día de la semana
-            OutlinedButton(
-                onClick = { showDayPicker = true },
-                modifier = Modifier.fillMaxWidth()
+            // Sección de horarios
+            Text(
+                text = "Horarios de clase",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            // Mostrar horarios agregados
+            if (scheduleList.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    scheduleList.forEach { schedule ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = getDayInSpanish(schedule.day),
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = schedule.time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                                        fontSize = 13.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        scheduleList = scheduleList.filter { it.id != schedule.id }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Eliminar horario",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            
+            // Selectores para agregar nuevo horario
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = selectedDay?.let { getDayInSpanish(it) } ?: "Seleccionar día de clase",
-                    color = if (selectedDay == null) Color.Gray else MaterialTheme.colorScheme.onSurface
-                )
+                OutlinedButton(
+                    onClick = { showDayPicker = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = selectedDay?.let { getDayInSpanish(it) } ?: "Día",
+                        color = if (selectedDay == null) Color.Gray else MaterialTheme.colorScheme.onSurface,
+                        fontSize = 13.sp
+                    )
+                }
+                
+                OutlinedButton(
+                    onClick = { showTimePicker = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Hora",
+                        color = if (selectedTime == null) Color.Gray else MaterialTheme.colorScheme.onSurface,
+                        fontSize = 13.sp
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Selector de hora
-            OutlinedButton(
-                onClick = { showTimePicker = true },
-                modifier = Modifier.fillMaxWidth()
+            // Botón para agregar horario
+            Button(
+                onClick = {
+                    if (selectedDay != null && selectedTime != null) {
+                        val newSchedule = ScheduleItem(
+                            day = selectedDay!!,
+                            time = selectedTime!!
+                        )
+                        scheduleList = scheduleList + newSchedule
+                        // Limpiar selección
+                        selectedDay = null
+                        selectedTime = null
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Selecciona día y hora para agregar",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = selectedDay != null && selectedTime != null
             ) {
-                Text(
-                    text = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Seleccionar hora de clase",
-                    color = if (selectedTime == null) Color.Gray else MaterialTheme.colorScheme.onSurface
-                )
+                Text("+ Agregar horario")
             }
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -272,31 +378,50 @@ fun SaveQRScreen(
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
-                            selectedDay == null -> {
+                            scheduleList.isEmpty() -> {
                                 Toast.makeText(
                                     context,
-                                    "Por favor selecciona el día de clase",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                            selectedTime == null -> {
-                                Toast.makeText(
-                                    context,
-                                    "Por favor selecciona la hora de clase",
+                                    "Por favor agrega al menos un horario de clase",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
                             else -> {
+                                // Crear la lista de notificaciones desde scheduleList
+                                Log.d("SaveQRScreen", "=== Intentando guardar QR ===")
+                                Log.d("SaveQRScreen", "Nombre: $qrName")
+                                Log.d("SaveQRScreen", "URL: $decodedUrl")
+                                Log.d("SaveQRScreen", "Horarios agregados: ${scheduleList.size}")
+                                scheduleList.forEachIndexed { index, schedule ->
+                                    Log.d("SaveQRScreen", "  Horario $index: ${schedule.day} a las ${schedule.time}")
+                                }
+                                Log.d("SaveQRScreen", "Notificaciones habilitadas: $notificationEnabled")
+                                
+                                val notifications = scheduleList.map { schedule ->
+                                    com.unab.registroqr.data.ClassNotification(
+                                        courseName = qrName,
+                                        dayOfWeek = schedule.day,
+                                        classTime = schedule.time,
+                                        enabled = notificationEnabled
+                                    )
+                                }
+                                
+                                Log.d("SaveQRScreen", "Notificaciones creadas: ${notifications.size}")
+                                
                                 val newQR = SavedQR(
                                     link = decodedUrl,
                                     name = qrName,
                                     color = selectedColor,
                                     position = 0, // Se ajustará en el ViewModel
-                                    courseName = qrName, // Usamos el nombre del botón como nombre del curso
-                                    dayOfWeek = selectedDay,
-                                    classTime = selectedTime,
+                                    notifications = notifications,
+                                    // Campos legacy para compatibilidad
+                                    courseName = qrName,
+                                    dayOfWeek = scheduleList.firstOrNull()?.day,
+                                    classTime = scheduleList.firstOrNull()?.time,
                                     notificationEnabled = notificationEnabled
                                 )
+                                
+                                Log.d("SaveQRScreen", "QR creado con ID: ${newQR.id}")
+                                Log.d("SaveQRScreen", "Llamando a viewModel.saveQR()...")
                                 viewModel.saveQR(newQR)
                             }
                         }
@@ -370,66 +495,49 @@ private fun getDayInSpanish(day: DayOfWeek): String {
 }
 
 /**
- * Diálogo simplificado para seleccionar hora
+ * Diálogo con reloj visual para seleccionar hora
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimePickerDialog(
     onDismiss: () -> Unit,
     onTimeSelected: (hour: Int, minute: Int) -> Unit
 ) {
-    var selectedHour by remember { mutableStateOf(8) }
-    var selectedMinute by remember { mutableStateOf(0) }
+    val timePickerState = rememberTimePickerState(
+        initialHour = 8,
+        initialMinute = 0,
+        is24Hour = true
+    )
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Seleccionar hora de clase") },
-        text = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Selector de hora
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = { selectedHour = (selectedHour + 1) % 24 }) {
-                        Text("▲")
-                    }
-                    Text(
-                        text = String.format("%02d", selectedHour),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(onClick = { selectedHour = if (selectedHour == 0) 23 else selectedHour - 1 }) {
-                        Text("▼")
-                    }
-                }
-                
-                Text(" : ", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                
-                // Selector de minutos
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = { selectedMinute = (selectedMinute + 15) % 60 }) {
-                        Text("▲")
-                    }
-                    Text(
-                        text = String.format("%02d", selectedMinute),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(onClick = { selectedMinute = if (selectedMinute == 0) 45 else selectedMinute - 15 }) {
-                        Text("▼")
-                    }
-                }
-            }
-        },
         confirmButton = {
-            TextButton(onClick = { onTimeSelected(selectedHour, selectedMinute) }) {
+            TextButton(onClick = { 
+                onTimeSelected(timePickerState.hour, timePickerState.minute)
+            }) {
                 Text("Aceptar")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancelar")
+            }
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Seleccionar hora de clase",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                TimePicker(
+                    state = timePickerState,
+                    modifier = Modifier.padding(16.dp)
+                )
             }
         }
     )

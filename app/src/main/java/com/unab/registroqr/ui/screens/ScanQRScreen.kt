@@ -1,7 +1,10 @@
 package com.unab.registroqr.ui.screens
 
 import android.Manifest
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -12,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -59,6 +63,56 @@ fun ScanQRScreen(
     var flashEnabled by remember { mutableStateOf(false) }
     var cameraControl by remember { mutableStateOf<androidx.camera.core.CameraControl?>(null) }
     
+    // Launcher para seleccionar imagen de la galería
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                try {
+                    when (val result = QRScanner.scanQRFromUri(context, it)) {
+                        is QRScanResult.Success -> {
+                            // Verificar si el QR ya existe
+                            if (viewModel.linkExists(result.url)) {
+                                Toast.makeText(
+                                    context,
+                                    "Este QR ya está guardado. No se permiten URLs duplicadas.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                val encodedUrl = URLEncoder.encode(
+                                    result.url,
+                                    StandardCharsets.UTF_8.toString()
+                                )
+                                navController.navigate(Screen.SaveQR.createRoute(encodedUrl))
+                            }
+                        }
+                        is QRScanResult.InvalidQR -> {
+                            Toast.makeText(
+                                context,
+                                "Este QR no es válido para registro de asistencia UNAB",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        is QRScanResult.NoQRFound -> {
+                            Toast.makeText(
+                                context,
+                                "No se encontró ningún código QR en la imagen",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        context,
+                        "Error al procesar la imagen: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+    
     LaunchedEffect(Unit) {
         if (!cameraPermissionState.status.isGranted) {
             cameraPermissionState.launchPermissionRequest()
@@ -100,10 +154,9 @@ fun ScanQRScreen(
                                         it.setSurfaceProvider(previewView.surfaceProvider)
                                     }
                                 
-                                // Análisis de imagen en tiempo real para detectar QR - SUPER OPTIMIZADO
+                                // Análisis de imagen en tiempo real - OPTIMIZADO PARA QR CON LOGO
                                 val imageAnalyzer = ImageAnalysis.Builder()
                                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                    .setTargetResolution(android.util.Size(1280, 720)) // Resolución óptima
                                     .build()
                                     .also {
                                         it.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
@@ -117,11 +170,21 @@ fun ScanQRScreen(
                                                                     hasScanned = true
                                                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                                                         try {
-                                                                            val encodedUrl = URLEncoder.encode(
-                                                                                result.url,
-                                                                                StandardCharsets.UTF_8.toString()
-                                                                            )
-                                                                            navController.navigate(Screen.SaveQR.createRoute(encodedUrl))
+                                                                            // Verificar si el QR ya existe
+                                                                            if (viewModel.linkExists(result.url)) {
+                                                                                Toast.makeText(
+                                                                                    context,
+                                                                                    "Este QR ya está guardado. No se permiten URLs duplicadas.",
+                                                                                    Toast.LENGTH_LONG
+                                                                                ).show()
+                                                                                hasScanned = false
+                                                                            } else {
+                                                                                val encodedUrl = URLEncoder.encode(
+                                                                                    result.url,
+                                                                                    StandardCharsets.UTF_8.toString()
+                                                                                )
+                                                                                navController.navigate(Screen.SaveQR.createRoute(encodedUrl))
+                                                                            }
                                                                         } catch (e: Exception) {
                                                                             Toast.makeText(
                                                                                 context,
@@ -284,15 +347,27 @@ fun ScanQRScreen(
                         )
                     }
                     
-                    // Texto de instrucción
-                    Text(
-                        text = "Apunta la cámara hacia el código QR",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge,
+                    // Textos de instrucción
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 48.dp)
-                    )
+                            .padding(bottom = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Apunta la cámara hacia el código QR",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Funciona con QR personalizados",
+                            color = Color.White.copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                     
                     // Botón de linterna (flash)
                     FloatingActionButton(
@@ -312,6 +387,23 @@ fun ScanQRScreen(
                             imageVector = if (flashEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
                             contentDescription = if (flashEnabled) "Apagar linterna" else "Encender linterna",
                             tint = if (flashEnabled) Color.White else Color.Gray
+                        )
+                    }
+                    
+                    // Botón de galería
+                    FloatingActionButton(
+                        onClick = {
+                            imagePickerLauncher.launch("image/*")
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Photo,
+                            contentDescription = "Seleccionar imagen de galería",
+                            tint = Color.Gray
                         )
                     }
                 }

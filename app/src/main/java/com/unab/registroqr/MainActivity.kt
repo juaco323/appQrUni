@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
     // Launcher para solicitar permiso de notificaciones
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
+    ) { _ ->
         // El permiso fue concedido o denegado
     }
     

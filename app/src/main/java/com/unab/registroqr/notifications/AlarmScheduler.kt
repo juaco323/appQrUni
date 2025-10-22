@@ -19,13 +19,29 @@ import java.util.*
 object AlarmScheduler {
     
     /**
-     * Programa una alarma para mostrar notificación a la hora de clase
+     * Programa alarmas para todas las notificaciones de un QR
      */
     fun scheduleClassNotification(context: Context, qr: SavedQR) {
-        if (qr.dayOfWeek == null || qr.classTime == null || !qr.notificationEnabled) {
-            return
-        }
+        // Cancelar alarmas anteriores de este QR
+        cancelClassNotification(context, qr.id)
         
+        // Programar una alarma por cada notificación activa
+        qr.notifications.forEachIndexed { index, notification ->
+            if (notification.enabled) {
+                scheduleNotification(context, qr, notification, index)
+            }
+        }
+    }
+    
+    /**
+     * Programa una notificación individual
+     */
+    private fun scheduleNotification(
+        context: Context, 
+        qr: SavedQR, 
+        notification: com.unab.registroqr.data.ClassNotification,
+        index: Int
+    ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         
         // Crear el intent para el BroadcastReceiver
@@ -33,20 +49,24 @@ object AlarmScheduler {
             action = "com.unab.registroqr.CLASS_NOTIFICATION"
             putExtra("qr_id", qr.id)
             putExtra("qr_link", qr.link)
-            putExtra("course_name", qr.courseName)
-            putExtra("day_of_week", qr.dayOfWeek.value)
-            putExtra("class_time", qr.classTime.toString())
+            putExtra("qr_name", qr.name)
+            putExtra("course_name", notification.courseName)
+            putExtra("day_of_week", notification.dayOfWeek.value)
+            putExtra("class_time", notification.classTime.toString())
         }
+        
+        // Usar un código único para cada notificación (qr.id + índice)
+        val requestCode = (qr.id + index.toString()).hashCode()
         
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            qr.id.hashCode(),
+            requestCode,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
-        // Calcular el próximo momento en que se debe mostrar la notificación
-        val triggerTime = getNextTriggerTime(qr.dayOfWeek, qr.classTime)
+        // Calcular el próximo momento en que se debe mostrar la notificación (30 min antes)
+        val triggerTime = getNextTriggerTime(notification.dayOfWeek, notification.classTime)
         
         // Programar la alarma
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -75,24 +95,29 @@ object AlarmScheduler {
     }
     
     /**
-     * Cancela una alarma programada
+     * Cancela todas las alarmas programadas para un QR
      */
     fun cancelClassNotification(context: Context, qrId: String) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         
-        val intent = Intent(context, NotificationReceiver::class.java).apply {
-            action = "com.unab.registroqr.CLASS_NOTIFICATION"
+        // Cancelar hasta 10 posibles notificaciones (suficiente para múltiples horarios)
+        for (index in 0..9) {
+            val intent = Intent(context, NotificationReceiver::class.java).apply {
+                action = "com.unab.registroqr.CLASS_NOTIFICATION"
+            }
+            
+            val requestCode = (qrId + index.toString()).hashCode()
+            
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
         }
-        
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            qrId.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        alarmManager.cancel(pendingIntent)
-        pendingIntent.cancel()
     }
     
     /**
@@ -105,20 +130,23 @@ object AlarmScheduler {
     }
     
     /**
-     * Calcula el próximo momento en que se debe activar la alarma
+     * Calcula el próximo momento en que se debe activar la alarma (5 minutos antes de la clase)
      */
     private fun getNextTriggerTime(dayOfWeek: DayOfWeek, classTime: LocalTime): Long {
         val now = LocalDateTime.now()
         var nextDate = LocalDate.now()
         
+        // Calcular la hora de notificación (5 minutos antes)
+        val notificationTime = classTime.minusMinutes(5)
+        
         // Encontrar la próxima ocurrencia del día de la semana
         while (nextDate.dayOfWeek != dayOfWeek || 
-               (nextDate == now.toLocalDate() && classTime <= now.toLocalTime())) {
+               (nextDate == now.toLocalDate() && notificationTime <= now.toLocalTime())) {
             nextDate = nextDate.plusDays(1)
         }
         
-        // Combinar fecha y hora
-        val nextDateTime = LocalDateTime.of(nextDate, classTime)
+        // Combinar fecha y hora de notificación
+        val nextDateTime = LocalDateTime.of(nextDate, notificationTime)
         
         // Convertir a milisegundos desde epoch
         return nextDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()

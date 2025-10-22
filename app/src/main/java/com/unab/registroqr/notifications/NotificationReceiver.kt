@@ -14,7 +14,8 @@ class NotificationReceiver : BroadcastReceiver() {
         if (intent.action == "com.unab.registroqr.CLASS_NOTIFICATION") {
             val qrId = intent.getStringExtra("qr_id") ?: return
             val qrLink = intent.getStringExtra("qr_link") ?: ""
-            val courseName = intent.getStringExtra("course_name") ?: "Clase"
+            val qrName = intent.getStringExtra("qr_name") ?: ""
+            val courseName = intent.getStringExtra("course_name") ?: qrName.ifEmpty { "Clase" }
             val dayOfWeekValue = intent.getIntExtra("day_of_week", 1)
             val classTime = intent.getStringExtra("class_time") ?: "00:00"
             

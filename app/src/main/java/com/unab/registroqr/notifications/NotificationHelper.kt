@@ -74,7 +74,7 @@ object NotificationHelper {
             .setContentTitle("⏰ Registra tu asistencia")
             .setContentText("Clase: $courseName")
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("Registra tu asistencia\n\nClase: $courseName\nDía: $dayInSpanish\nHora: $classTime"))
+                .bigText("Recuerda registrar tu asistencia dentro de 5 minutos\n\nClase: $courseName\nDía: $dayInSpanish\nHora: $classTime"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
