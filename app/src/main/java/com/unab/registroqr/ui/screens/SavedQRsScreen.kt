@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.unab.registroqr.data.SavedQR
+import com.unab.registroqr.navigation.Screen
+import com.unab.registroqr.utils.getDayInSpanish
 import com.unab.registroqr.viewmodel.QRViewModel
 import org.burnoutcrew.reorderable.*
 import java.time.DayOfWeek
@@ -58,26 +60,10 @@ fun SavedQRsScreen(
     var qrToDelete by remember { mutableStateOf<SavedQR?>(null) }
     var showOpenDialog by remember { mutableStateOf(false) }
     var qrToOpen by remember { mutableStateOf<SavedQR?>(null) }
-    var showEditDialog by remember { mutableStateOf(false) }
-    var qrToEdit by remember { mutableStateOf<SavedQR?>(null) }
-    var editedName by remember { mutableStateOf("") }
     
     // Estado para ordenamiento
     var selectedSortOption by remember { mutableStateOf(SortOption.BY_DAY) }
     var showSortMenu by remember { mutableStateOf(false) }
-    
-    // Función helper para convertir día a español
-    fun dayToSpanish(day: DayOfWeek): String {
-        return when (day) {
-            DayOfWeek.MONDAY -> "Lunes"
-            DayOfWeek.TUESDAY -> "Martes"
-            DayOfWeek.WEDNESDAY -> "Miércoles"
-            DayOfWeek.THURSDAY -> "Jueves"
-            DayOfWeek.FRIDAY -> "Viernes"
-            DayOfWeek.SATURDAY -> "Sábado"
-            DayOfWeek.SUNDAY -> "Domingo"
-        }
-    }
     
     // Estado para reordenamiento
     var reorderableList by remember { mutableStateOf(qrList) }
@@ -126,11 +112,13 @@ fun SavedQRsScreen(
                 },
                 actions = {
                     if (qrList.isNotEmpty()) {
-                        // Botón de editar/listo
-                        TextButton(
-                            onClick = { isEditMode = !isEditMode }
-                        ) {
-                            Text(if (isEditMode) "Listo" else "Editar")
+                        // Botón de editar/listo (solo si no está en modo CUSTOM)
+                        if (selectedSortOption != SortOption.CUSTOM) {
+                            TextButton(
+                                onClick = { isEditMode = !isEditMode }
+                            ) {
+                                Text(if (isEditMode) "Listo" else "Editar")
+                            }
                         }
                         
                         // Botón de ordenar
@@ -225,13 +213,45 @@ fun SavedQRsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
+                // Mensaje informativo en modo CUSTOM
+                if (selectedSortOption == SortOption.CUSTOM) {
+                    item(key = "info_message") {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "💡",
+                                    fontSize = 20.sp,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                                Text(
+                                    text = "Mantén pulsado un botón y arrástralo para cambiar el orden",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+                
                 if (selectedSortOption == SortOption.BY_DAY) {
                     // Mostrar con headers por día
                     groupedQRs.forEach { (dayOfWeek, qrsForDay) ->
                         // Header del día
                         item(key = "header_$dayOfWeek") {
                             Text(
-                                text = dayToSpanish(dayOfWeek),
+                                text = getDayInSpanish(dayOfWeek),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
@@ -264,9 +284,8 @@ fun SavedQRsScreen(
                                     showDeleteDialog = true
                                 },
                                 onEdit = {
-                                    qrToEdit = qr
-                                    editedName = qr.name
-                                    showEditDialog = true
+                                    // Navegar a pantalla de edición completa
+                                    navController.navigate(Screen.EditQR.createRoute(qr.id))
                                 }
                             )
                         }
@@ -296,9 +315,8 @@ fun SavedQRsScreen(
                                     showDeleteDialog = true
                                 },
                                 onEdit = {
-                                    qrToEdit = qr
-                                    editedName = qr.name
-                                    showEditDialog = true
+                                    // Navegar a pantalla de edición completa
+                                    navController.navigate(Screen.EditQR.createRoute(qr.id))
                                 }
                             )
                         }
@@ -358,44 +376,8 @@ fun SavedQRsScreen(
             }
         )
     }
-    
-    // Diálogo para editar nombre
-    if (showEditDialog && qrToEdit != null) {
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = { Text("Editar nombre del botón") },
-            text = {
-                OutlinedTextField(
-                    value = editedName,
-                    onValueChange = { if (it.length <= 30) editedName = it },
-                    label = { Text("Nombre del botón") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (editedName.isNotBlank()) {
-                            val updatedQR = qrToEdit!!.copy(name = editedName)
-                            viewModel.updateQR(updatedQR)
-                            showEditDialog = false
-                            Toast.makeText(context, "Nombre actualizado", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    enabled = editedName.isNotBlank()
-                ) {
-                    Text("Guardar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditDialog = false }) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
 }
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun QRButton(
@@ -449,6 +431,23 @@ fun QRButton(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 48.dp)
                 )
+            }
+            
+            // Indicador de drag en modo arrastre (cuando isDragging es posible)
+            if (!isEditMode && isDragging) {
+                // Mostrar indicador de que se está arrastrando
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 8.dp)
+                ) {
+                    Text(
+                        text = "⋮⋮",
+                        fontSize = 24.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             
             // Botones en modo edición

@@ -11,4 +11,7 @@ sealed class Screen(val route: String) {
     object SaveQR : Screen("save_qr/{qrUrl}") {
         fun createRoute(qrUrl: String) = "save_qr/$qrUrl"
     }
+    object EditQR : Screen("edit_qr/{qrId}") {
+        fun createRoute(qrId: String) = "edit_qr/$qrId"
+    }
 }

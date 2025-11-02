@@ -1,7 +1,5 @@
 package com.unab.registroqr.ui.screens
 
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -10,10 +8,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -26,96 +24,79 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.unab.registroqr.data.ClassNotification
 import com.unab.registroqr.data.QRColor
-import com.unab.registroqr.data.SaveQRResult
-import com.unab.registroqr.data.SavedQR
 import com.unab.registroqr.data.ScheduleItem
-import com.unab.registroqr.navigation.Screen
 import com.unab.registroqr.utils.getDayInSpanish
 import com.unab.registroqr.viewmodel.QRViewModel
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import android.util.Log
 
-/**
- * Pantalla para guardar un QR escaneado
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SaveQRScreen(
+fun EditQRScreen(
     navController: NavController,
-    qrUrl: String,
+    qrId: String,
     viewModel: QRViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val decodedUrl = remember {
-        URLDecoder.decode(qrUrl, StandardCharsets.UTF_8.toString())
+    val qrList by viewModel.qrList.collectAsState()
+
+    val currentQR = remember(qrList, qrId) {
+        qrList.find { it.id == qrId }
     }
-    
-    var qrName by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf(QRColor.BLUE) }
-    
-    // Campos temporales para agregar un horario
-    var selectedDay by remember { mutableStateOf<DayOfWeek?>(null) }
-    var selectedTime by remember { mutableStateOf<LocalTime?>(null) }
-    
-    // Lista de horarios agregados
-    var scheduleList by remember { mutableStateOf<List<ScheduleItem>>(emptyList()) }
-    
-    var notificationEnabled by remember { mutableStateOf(true) }
-    var showDayPicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    
-    val saveResult by viewModel.saveResult.collectAsState()
-    
-    // Observar resultado del guardado
-    LaunchedEffect(saveResult) {
-        when (saveResult) {
-            is SaveQRResult.Success -> {
-                Toast.makeText(context, "QR guardado exitosamente", Toast.LENGTH_SHORT).show()
-                viewModel.resetSaveResult()
-                
-                // Abrir el link directamente en el navegador
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(decodedUrl))
-                context.startActivity(intent)
-                
-                // Volver al menú principal
-                navController.navigate(Screen.MainMenu.route) {
-                    popUpTo(Screen.MainMenu.route) { inclusive = true }
-                }
-            }
-            is SaveQRResult.Duplicate -> {
-                Toast.makeText(context, "Este QR ya está guardado", Toast.LENGTH_SHORT).show()
-                viewModel.resetSaveResult()
-            }
-            is SaveQRResult.LimitReached -> {
-                Toast.makeText(context, "Límite de 20 QRs alcanzado", Toast.LENGTH_LONG).show()
-                viewModel.resetSaveResult()
-            }
-            is SaveQRResult.InvalidURL -> {
-                Toast.makeText(
-                    context,
-                    "URL inválida. Solo se permiten QRs de registroasistenciaqr.unab.cl",
-                    Toast.LENGTH_LONG
-                ).show()
-                viewModel.resetSaveResult()
-                navController.navigateUp()
-            }
-            null -> { /* No hacer nada */ }
+
+    LaunchedEffect(currentQR) {
+        if (currentQR == null) {
+            Toast.makeText(context, "QR no encontrado", Toast.LENGTH_SHORT).show()
+            navController.navigateUp()
         }
     }
-    
+
+    var qrName by remember(currentQR) { mutableStateOf(currentQR?.name ?: "") }
+    var selectedColor by remember(currentQR) { mutableStateOf(currentQR?.color ?: QRColor.BLUE) }
+
+    var scheduleList by remember(currentQR) {
+        mutableStateOf(
+            currentQR?.notifications?.map { notification ->
+                ScheduleItem(
+                    id = notification.id,
+                    day = notification.dayOfWeek,
+                    time = notification.classTime
+                )
+            } ?: emptyList()
+        )
+    }
+
+    var notificationEnabled by remember(currentQR) {
+        mutableStateOf(currentQR?.notifications?.firstOrNull()?.enabled ?: true)
+    }
+
+    var selectedDay by remember { mutableStateOf<DayOfWeek?>(null) }
+    var selectedTime by remember { mutableStateOf<LocalTime?>(null) }
+    var showDayPicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    if (currentQR == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Guardar QR") },
+                title = { Text("Editar QR") },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.Default.ArrowBack, "Volver")
@@ -141,8 +122,7 @@ fun SaveQRScreen(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 24.dp)
             )
-            
-            // Campo de nombre
+
             OutlinedTextField(
                 value = qrName,
                 onValueChange = { if (it.length <= 30) qrName = it },
@@ -151,7 +131,7 @@ fun SaveQRScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
-            
+
             Text(
                 text = "${qrName.length}/30",
                 fontSize = 12.sp,
@@ -160,18 +140,16 @@ fun SaveQRScreen(
                     .align(Alignment.End)
                     .padding(top = 4.dp)
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
-            // Sección de horarios
+
             Text(
                 text = "Horarios de clase",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            
-            // Mostrar horarios agregados
+
             if (scheduleList.isNotEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -220,8 +198,7 @@ fun SaveQRScreen(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
-            
-            // Selectores para agregar nuevo horario
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -236,7 +213,7 @@ fun SaveQRScreen(
                         fontSize = 13.sp
                     )
                 }
-                
+
                 OutlinedButton(
                     onClick = { showTimePicker = true },
                     modifier = Modifier.weight(1f)
@@ -248,10 +225,9 @@ fun SaveQRScreen(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
-            // Botón para agregar horario
+
             Button(
                 onClick = {
                     if (selectedDay != null && selectedTime != null) {
@@ -260,7 +236,6 @@ fun SaveQRScreen(
                             time = selectedTime!!
                         )
                         scheduleList = scheduleList + newSchedule
-                        // Limpiar selección
                         selectedDay = null
                         selectedTime = null
                     } else {
@@ -276,10 +251,9 @@ fun SaveQRScreen(
             ) {
                 Text("+ Agregar horario")
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
-            // Switch para habilitar notificaciones
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -302,9 +276,9 @@ fun SaveQRScreen(
                     onCheckedChange = { notificationEnabled = it }
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             Text(
                 text = "Selecciona un color",
                 fontSize = 16.sp,
@@ -313,8 +287,7 @@ fun SaveQRScreen(
                     .align(Alignment.Start)
                     .padding(bottom = 12.dp)
             )
-            
-            // Paleta de colores
+
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -322,17 +295,16 @@ fun SaveQRScreen(
                 modifier = Modifier.height(240.dp)
             ) {
                 items(QRColor.values().toList()) { color ->
-                    ColorCircle(
+                    EditColorCircle(
                         color = color,
                         isSelected = color == selectedColor,
                         onClick = { selectedColor = color }
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
-            // Preview del botón
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -353,10 +325,9 @@ fun SaveQRScreen(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.weight(1f))
-            
-            // Botones de acción
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -367,7 +338,7 @@ fun SaveQRScreen(
                 ) {
                     Text("Cancelar")
                 }
-                
+
                 Button(
                     onClick = {
                         when {
@@ -386,56 +357,41 @@ fun SaveQRScreen(
                                 ).show()
                             }
                             else -> {
-                                // Crear la lista de notificaciones desde scheduleList
-                                Log.d("SaveQRScreen", "=== Intentando guardar QR ===")
-                                Log.d("SaveQRScreen", "Nombre: $qrName")
-                                Log.d("SaveQRScreen", "URL: $decodedUrl")
-                                Log.d("SaveQRScreen", "Horarios agregados: ${scheduleList.size}")
-                                scheduleList.forEachIndexed { index, schedule ->
-                                    Log.d("SaveQRScreen", "  Horario $index: ${schedule.day} a las ${schedule.time}")
-                                }
-                                Log.d("SaveQRScreen", "Notificaciones habilitadas: $notificationEnabled")
-                                
-                                val notifications = scheduleList.map { schedule ->
-                                    com.unab.registroqr.data.ClassNotification(
+                                val updatedNotifications = scheduleList.map { schedule ->
+                                    ClassNotification(
+                                        id = schedule.id,
                                         courseName = qrName,
                                         dayOfWeek = schedule.day,
                                         classTime = schedule.time,
                                         enabled = notificationEnabled
                                     )
                                 }
-                                
-                                Log.d("SaveQRScreen", "Notificaciones creadas: ${notifications.size}")
-                                
-                                val newQR = SavedQR(
-                                    link = decodedUrl,
+
+                                val updatedQR = currentQR.copy(
                                     name = qrName,
                                     color = selectedColor,
-                                    position = 0, // Se ajustará en el ViewModel
-                                    notifications = notifications,
-                                    // Campos legacy para compatibilidad
+                                    notifications = updatedNotifications,
                                     courseName = qrName,
                                     dayOfWeek = scheduleList.firstOrNull()?.day,
                                     classTime = scheduleList.firstOrNull()?.time,
                                     notificationEnabled = notificationEnabled
                                 )
-                                
-                                Log.d("SaveQRScreen", "QR creado con ID: ${newQR.id}")
-                                Log.d("SaveQRScreen", "Llamando a viewModel.saveQR()...")
-                                viewModel.saveQR(newQR)
+
+                                viewModel.updateQR(updatedQR)
+                                Toast.makeText(context, "QR actualizado", Toast.LENGTH_SHORT).show()
+                                navController.navigateUp()
                             }
                         }
                     },
                     modifier = Modifier.weight(1f),
                     enabled = qrName.isNotBlank()
                 ) {
-                    Text("Guardar")
+                    Text("Guardar cambios")
                 }
             }
         }
     }
-    
-    // Diálogo para seleccionar día
+
     if (showDayPicker) {
         AlertDialog(
             onDismissRequest = { showDayPicker = false },
@@ -453,7 +409,7 @@ fun SaveQRScreen(
                             Text(
                                 text = getDayInSpanish(day),
                                 modifier = Modifier.fillMaxWidth(),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                                textAlign = TextAlign.Start
                             )
                         }
                     }
@@ -466,10 +422,9 @@ fun SaveQRScreen(
             }
         )
     }
-    
-    // Diálogo para seleccionar hora
+
     if (showTimePicker) {
-        TimePickerDialog(
+        EditTimePickerDialog(
             onDismiss = { showTimePicker = false },
             onTimeSelected = { hour, minute ->
                 selectedTime = LocalTime.of(hour, minute)
@@ -479,12 +434,9 @@ fun SaveQRScreen(
     }
 }
 
-/**
- * Diálogo con reloj visual para seleccionar hora
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimePickerDialog(
+fun EditTimePickerDialog(
     onDismiss: () -> Unit,
     onTimeSelected: (hour: Int, minute: Int) -> Unit
 ) {
@@ -493,11 +445,11 @@ fun TimePickerDialog(
         initialMinute = 0,
         is24Hour = true
     )
-    
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { 
+            TextButton(onClick = {
                 onTimeSelected(timePickerState.hour, timePickerState.minute)
             }) {
                 Text("Aceptar")
@@ -529,7 +481,7 @@ fun TimePickerDialog(
 }
 
 @Composable
-fun ColorCircle(
+fun EditColorCircle(
     color: QRColor,
     isSelected: Boolean,
     onClick: () -> Unit

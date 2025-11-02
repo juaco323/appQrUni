@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.unab.registroqr.navigation.Screen
+import com.unab.registroqr.ui.screens.EditQRScreen
 import com.unab.registroqr.ui.screens.MainMenuScreen
 import com.unab.registroqr.ui.screens.ManualEntryScreen
 import com.unab.registroqr.ui.screens.SaveQRScreen
@@ -103,6 +104,20 @@ class MainActivity : ComponentActivity() {
                             SaveQRScreen(
                                 navController = navController,
                                 qrUrl = qrUrl,
+                                viewModel = viewModel
+                            )
+                        }
+                        
+                        composable(
+                            route = Screen.EditQR.route,
+                            arguments = listOf(
+                                navArgument("qrId") { type = NavType.StringType }
+                            )
+                        ) { backStackEntry ->
+                            val qrId = backStackEntry.arguments?.getString("qrId") ?: ""
+                            EditQRScreen(
+                                navController = navController,
+                                qrId = qrId,
                                 viewModel = viewModel
                             )
                         }
