@@ -95,16 +95,6 @@ class QRViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * Actualiza el orden de los QR
-     */
-    fun updateQROrder(newOrder: List<SavedQR>) {
-        viewModelScope.launch {
-            repository.updateQROrder(newOrder)
-            loadQRs()
-        }
-    }
-    
-    /**
      * Actualiza un QR existente
      */
     fun updateQR(qr: SavedQR) {

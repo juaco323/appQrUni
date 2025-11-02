@@ -87,9 +87,6 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
     
-    // Reorderable list
-    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
-    
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

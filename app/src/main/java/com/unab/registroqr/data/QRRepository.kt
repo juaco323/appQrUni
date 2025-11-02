@@ -103,16 +103,6 @@ class QRRepository(context: Context) {
     }
     
     /**
-     * Actualiza el orden de los QR
-     */
-    fun updateQROrder(qrList: List<SavedQR>) {
-        val updatedList = qrList.mapIndexed { index, qr ->
-            qr.copy(position = index)
-        }
-        saveList(updatedList)
-    }
-    
-    /**
      * Actualiza un QR existente
      */
     fun updateQR(updatedQR: SavedQR) {
